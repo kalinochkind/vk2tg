@@ -1,0 +1,14 @@
+{
+  "vk":
+  {
+    "token": "YOUR_VK_TOKEN",
+    "groups": ["group1", "id1", "some_group_domain"],
+    "check_interval": 30,
+    "db_path": "/var/www/vk2tg"
+  },
+  "telegram":
+  {
+    "token": "YOUR_TG_TOKEN",
+    "channel": "@your_channel"
+  }
+}
