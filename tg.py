@@ -15,7 +15,10 @@ class TelegramPoster:
 
     def new_post(self, post: Post):
         text = post.get_telegram_text()
-        msg = self.bot.send_message(chat_id=self.channel, text=text, disable_web_page_preview=True)
+        msg = self.bot.send_message(chat_id=self.channel, text=text, parse_mode='html',
+                                    disable_web_page_preview=True)
+        for title, url in post.doc:
+            self.bot.send_document(chat_id=self.channel, document=url, filename=title)
         if post.photo:
             media = [telegram.InputMediaPhoto(url) for url in post.photo]
             self.bot.send_media_group(self.channel, media)
@@ -23,7 +26,7 @@ class TelegramPoster:
 
     def edit_post(self, post: Post):
         text = post.get_telegram_text()
-        return self.bot.edit_message_text(chat_id=self.channel, message_id=post.tg_id, text=text,
+        return self.bot.edit_message_text(chat_id=self.channel, message_id=post.tg_id, text=text, parse_mode='html',
                                           disable_web_page_preview=True)
 
     def post(self, post):
