@@ -1,4 +1,7 @@
+import logging
+
 import telegram
+
 
 class TelegramPoster:
 
@@ -9,25 +12,31 @@ class TelegramPoster:
             self.channel = '@' + self.channel
 
     def get_message_text(self, post):
-        return post['text'].strip() + '\n\n' + post['link']
+        text = post['text'].strip()
+        if 'video' in post:
+            text += '\n'
+            for video in post['video']:
+                text += '\nhttps://vk.com/video{}_{}'.format(*video)
+        return text + '\n\n' + post['link']
 
     def new_post(self, post):
         text = self.get_message_text(post)
-        if post.get('photo'):
-            return self.bot.send_photo(chat_id=self.channel, photo=post['photo'], caption=text)
-        else:
-            return self.bot.send_message(chat_id=self.channel, text=text, disable_web_page_preview=True)
+        msg = self.bot.send_message(chat_id=self.channel, text=text, disable_web_page_preview=True)
+        if 'photo' in post:
+            media = [telegram.InputMediaPhoto(url) for url in post['photo']]
+            self.bot.send_media_group(self.channel, media)
+        return msg
 
     def edit_post(self, msg_id, post):
         text = self.get_message_text(post)
-        if post.get('photo'):
-            return self.bot.edit_message_caption(chat_id=self.channel, message_id=msg_id, caption=text)
-        else:
-            return self.bot.edit_message_text(chat_id=self.channel, message_id=msg_id, text=text,
-                                              disable_web_page_preview=True)
+        return self.bot.edit_message_text(chat_id=self.channel, message_id=msg_id, text=text,
+                                          disable_web_page_preview=True)
 
     def post(self, post):
-        if 'telegram_id' in post:
-            self.edit_post(post['telegram_id'], post)
-        else:
-            post['telegram_id'] = self.new_post(post).message_id
+        try:
+            if 'telegram_id' in post:
+                self.edit_post(post['telegram_id'], post)
+            else:
+                post['telegram_id'] = self.new_post(post).message_id
+        except Exception:
+            logging.exception("TG error")

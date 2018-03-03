@@ -16,7 +16,7 @@ class VkMonitor:
         self.callback = post_changed_callback
         for group in self.groups:
             if group not in self.db:
-                self.db[group] = {}
+                self.db[group] = {'last': None}
 
     def api_call(self, method, params):
         params['v'] = self.API_VERSION
@@ -31,19 +31,31 @@ class VkMonitor:
 
     def monitor_forever(self):
         while True:
-            for group in self.groups:
-                params = {'count': 5}
-                if group.lstrip('-').isdigit():
-                    params['owner_id'] = group
-                else:
-                    params['domain'] = group
-                response = self.api_call('wall.get', params)
-                if response is None:
-                    continue
-                for post in response['items']:
-                    self.process_post(group, post)
-                if len(self.db[group]) > 20:
-                    self.cleanup(group)
+            try:
+               for group in self.groups:
+                    params = {'count': 10}
+                    if group.lstrip('-').isdigit():
+                        params['owner_id'] = group
+                    else:
+                        params['domain'] = group
+                    response = self.api_call('wall.get', params)
+                    if response is None:
+                        continue
+                    max_post_id = self.db[group]['last']
+                    for post in sorted(response['items'], key=lambda x: x['id']):
+                        if max_post_id is not None and max_post_id < post['id']:
+                            self.process_post(group, post)
+                        if 'telegram_id' in self.db[group].get(post['id'], ''):
+                            self.process_post(group, post)
+                    max_existing_post = max(post['id'] for post in response['items'])
+                    if max_post_id is None:
+                        self.db[group]['last'] = max_existing_post
+                    else:
+                        self.db[group]['last'] = max(max_existing_post, max_post_id)
+                    if len(self.db[group]) > 20:
+                        self.cleanup(group)
+            except Exception:
+                logging.exception('Monitor error')
             self.db.sync()
             time.sleep(self.check_interval)
 
@@ -58,14 +70,7 @@ class VkMonitor:
     def process_post(self, group, post):
         if post['id'] not in self.db[group]:
             post_dict = {'link': self.generate_post_link(post), 'text': post['text']}
-            for attachment in post.get('attachments', []):
-                if attachment['type'] == 'photo':
-                    # что делать, если фоток несколько?
-                    max_size = max(int(param.split('_')[1])
-                                   for param in attachment['photo']
-                                   if param.startswith('photo_'))
-                    post_dict['photo'] = attachment['photo'].get('photo_' + str(max_size))
-                # надо добавить другие типы вложений
+            self.fill_attachments(post, post_dict)
             self.db[group][post['id']] = post_dict
         else:
             old_post = self.db[group][post['id']]
@@ -73,7 +78,16 @@ class VkMonitor:
                 # возможно, нужно проверять не только текст
                 return
             old_post['text'] = post['text']
-        try:
-            self.callback(self.db[group][post['id']])
-        except Exception:
-            logging.exception('Callback error')
+        self.callback(self.db[group][post['id']])
+
+
+    def fill_attachments(self, vk_post, post_dict):
+        for attachment in vk_post.get('attachments', []):
+            if attachment['type'] == 'photo':
+                max_size = max(int(param.split('_')[1])
+                               for param in attachment['photo']
+                               if param.startswith('photo_'))
+                post_dict.setdefault('photo', []).append(attachment['photo'].get('photo_' + str(max_size)))
+            elif attachment['type'] == 'video':
+                post_dict.setdefault('video', []).append((attachment['video']['owner_id'], attachment['video']['id']))
+            # надо добавить другие типы вложений
