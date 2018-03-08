@@ -34,7 +34,7 @@ class VkMonitor:
     def monitor_forever(self):
         while True:
             try:
-               for group in self.groups:
+                for group in self.groups:
                     params = {'count': 10}
                     if group.lstrip('-').isdigit():
                         params['owner_id'] = group
@@ -54,17 +54,10 @@ class VkMonitor:
                         self.db[group]['last'] = max_existing_post
                     else:
                         self.db[group]['last'] = max(max_existing_post, max_post_id)
-                    if len(self.db[group]) > 20:
-                        self.cleanup(group)
             except Exception:
                 logging.exception('Monitor error')
             self.db.sync()
             time.sleep(self.check_interval)
-
-    def cleanup(self, group):
-        old_post_ids = sorted(map(int, self.db[group].keys()))[:-20]
-        for post_id in old_post_ids:
-            del self.db[group][post_id]
 
     def process_post(self, group, vk_post, edit_only=False):
         post = Post(vk_post)
