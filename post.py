@@ -68,7 +68,7 @@ class Post:
             text += '\n\n' + build_vk_link(*self.repost)
         hidden_link = self.get_hidden_link()
         if hidden_link:
-            text = '<a href="{}">&#160;</a>\n'.format(hidden_link) + text
+            text = '<a href="{}">&#8203;</a>\n'.format(hidden_link) + text
         return text
 
     def __eq__(self, other):
