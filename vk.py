@@ -1,4 +1,4 @@
-import shelve
+import pickle
 import requests
 import time
 import logging
@@ -14,11 +14,24 @@ class VkMonitor:
         self.token = config_dict['token']
         self.groups = config_dict['groups']
         self.check_interval = int(config_dict['check_interval'])
-        self.db = shelve.open(config_dict['db_path'], writeback=True)
+        self.db_path = config_dict['db_path']
+        self.db = {}
+        self.load_db()
         self.callback = post_changed_callback
         for group in self.groups:
             if group not in self.db:
                 self.db[group] = {'last': None}
+
+    def load_db(self):
+        try:
+            with open(self.db_path, 'rb') as f:
+                self.db = pickle.load(f)
+        except FileNotFoundError:
+            pass
+
+    def save_db(self):
+        with open(self.db_path, 'wb') as f:
+            pickle.dump(self.db, f)
 
     def api_call(self, method, params):
         params['v'] = self.API_VERSION
@@ -33,6 +46,7 @@ class VkMonitor:
 
     def monitor_forever(self):
         while True:
+            changed = 0
             try:
                 for group in self.groups:
                     params = {'count': 10}
@@ -46,26 +60,30 @@ class VkMonitor:
                     max_post_id = self.db[group]['last']
                     for post in sorted(response['items'], key=lambda x: x['id']):
                         if max_post_id is not None and max_post_id < post['id']:
-                            self.process_post(group, post)
+                            changed += self.process_post(group, post)
                         else:
-                            self.process_post(group, post, edit_only=True)
+                            changed += self.process_post(group, post, edit_only=True)
                     max_existing_post = max(post['id'] for post in response['items'])
                     if max_post_id is None:
                         self.db[group]['last'] = max_existing_post
-                    else:
-                        self.db[group]['last'] = max(max_existing_post, max_post_id)
+                        changed += 1
+                    elif max_existing_post > max_post_id:
+                        self.db[group]['last'] = max_existing_post
+                        changed += 1
             except Exception:
                 logging.exception('Monitor error')
-            self.db.sync()
+            if changed:
+                self.save_db()
             time.sleep(self.check_interval)
 
     def process_post(self, group, vk_post, edit_only=False):
         post = Post(vk_post)
         if post.vk_id in self.db[group]:
             if post == self.db[group][post.vk_id]:
-                return
+                return False
             post.tg_id = self.db[group][post.vk_id].tg_id
         if edit_only and not post.tg_id:
-            return
+            return False
         self.db[group][post.vk_id] = post
         self.callback(post)
+        return True
