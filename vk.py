@@ -26,8 +26,8 @@ class VkMonitor:
         try:
             with open(self.db_path, 'rb') as f:
                 self.db = pickle.load(f)
-        except FileNotFoundError:
-            pass
+        except Exception:
+            logging.exception('Load error')
 
     def save_db(self):
         with open(self.db_path, 'wb') as f:
