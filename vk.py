@@ -84,6 +84,14 @@ class VkMonitor:
             post.tg_id = self.db[group][post.vk_id].tg_id
         if edit_only and not post.tg_id:
             return False
+        if post.repost and self.post_exists(*post.repost):
+            return True
         self.db[group][post.vk_id] = post
         self.callback(post)
         return True
+
+    def post_exists(self, owner_id, id):
+        for posts in self.db.values():
+            if id in posts and posts[id].owner_id == owner_id:
+                return True
+        return False
