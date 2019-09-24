@@ -49,7 +49,7 @@ class VkMonitor:
             changed = 0
             try:
                 for group in self.groups:
-                    params = {'count': 10}
+                    params = {'count': 10, 'extended': True}
                     if group.lstrip('-').isdigit():
                         params['owner_id'] = group
                     else:
@@ -57,12 +57,13 @@ class VkMonitor:
                     response = self.api_call('wall.get', params)
                     if response is None:
                         continue
+                    profiles = response.get('profiles', [])
                     max_post_id = self.db[group]['last']
                     for post in sorted(response['items'], key=lambda x: x['id']):
                         if max_post_id is not None and max_post_id < post['id']:
-                            changed += self.process_post(group, post)
+                            changed += self.process_post(group, post, profiles)
                         else:
-                            changed += self.process_post(group, post, edit_only=True)
+                            changed += self.process_post(group, post, profiles, edit_only=True)
                     max_existing_post = max(post['id'] for post in response['items'])
                     if max_post_id is None:
                         self.db[group]['last'] = max_existing_post
@@ -76,8 +77,8 @@ class VkMonitor:
                 self.save_db()
             time.sleep(self.check_interval)
 
-    def process_post(self, group, vk_post, edit_only=False):
-        post = Post(vk_post)
+    def process_post(self, group, vk_post, profiles, edit_only=False):
+        post = Post(vk_post, profiles)
         if post.vk_id in self.db[group]:
             if post == self.db[group][post.vk_id]:
                 return False

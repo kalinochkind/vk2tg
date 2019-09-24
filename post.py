@@ -13,9 +13,15 @@ def build_vk_link(owner_id, post_id):
     return 'https://vk.com/wall{}_{}'.format(owner_id, post_id)
 
 
+def get_user_info(user_id, profiles):
+    for profile in profiles:
+        if profile['id'] == user_id:
+            return {'id': user_id, 'first_name': profile['first_name'], 'last_name': profile['last_name']}
+
+
 class Post:
 
-    def __init__(self, vk_post):
+    def __init__(self, vk_post, profiles):
         self.vk_id = vk_post['id']
         self.owner_id = vk_post['owner_id']
         self.tg_id = None
@@ -24,6 +30,10 @@ class Post:
         self.links = []
         self.video = []
         self.doc = []
+        if 'signer_id' in vk_post:
+            self.signer = get_user_info(vk_post['signer_id'], profiles)
+        else:
+            self.signer = None
         self.repost = None
         self.fill_attachments(vk_post)
 
@@ -54,6 +64,11 @@ class Post:
         if self.repost:
             return build_vk_link(*self.repost)
 
+    def get_author_link(self):
+        if not self.signer:
+            return ''
+        return 'Автор: <a href="https://vk.com/id{id}">{first_name} {last_name}</a>'.format(**self.signer)
+
     def get_telegram_text(self):
         text = replace_vk_mentions(html.escape(self.text.strip()))
         if self.links:
@@ -66,6 +81,8 @@ class Post:
                 text += '\nhttps://vk.com/video{}_{}'.format(*video)
         if self.repost:
             text += '\n\n' + build_vk_link(*self.repost)
+        if self.signer:
+            text += '\n\n' + self.get_author_link()
         hidden_link = self.get_hidden_link()
         if hidden_link:
             text = '<a href="{}">&#8203;</a>\n'.format(hidden_link) + text
